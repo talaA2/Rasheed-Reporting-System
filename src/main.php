@@ -1,27 +1,32 @@
 <?php
-session_start();
+require_once __DIR__ . "/session.php";
 include "db.php";
  if (!isset($_SESSION['userID']) || $_SESSION['role'] != 'resident') {
     header("Location: login.php?error=Access denied");
     exit();
 }
-$residentID = $_SESSION['userID'] ?? 1 ;
+$residentID = (int) $_SESSION['userID'];
 
-$sql1 = "SELECT COUNT(*) as total FROM report WHERE residentID='$residentID'  AND NOT (status = 'Deleted' AND deletedByUser = 1)";
-$res1 = $conn->query($sql1);
-$totalReports = $res1->fetch_assoc()['total'];
+$stmt1 = $conn->prepare("SELECT COUNT(*) AS total FROM report WHERE residentID = ? AND NOT (status = 'Deleted' AND deletedByUser = 1)");
+$stmt1->bind_param("i", $residentID);
+$stmt1->execute();
+$totalReports = $stmt1->get_result()->fetch_assoc()['total'];
 
-$sql2 = "SELECT points FROM resident WHERE residentID='$residentID'";
-$res2 = $conn->query($sql2);
-$points = $res2->fetch_assoc()['points'] ?? 0;
-$badgeStatus = ($points >= 100) ? "Unlocked" : "Locked"; //HEREEEEE
+$stmt2 = $conn->prepare("SELECT points FROM resident WHERE residentID = ?");
+$stmt2->bind_param("i", $residentID);
+$stmt2->execute();
+$points = $stmt2->get_result()->fetch_assoc()['points'] ?? 0;
+$badgeStatus = ($points >= 100) ? "Unlocked" : "Locked";
 
-$sql3 = "SELECT * FROM report WHERE residentID='$residentID' AND NOT (status = 'Deleted' AND deletedByUser = 1) ORDER BY reportID DESC LIMIT 3";
-$reports = $conn->query($sql3);
+$stmt3 = $conn->prepare("SELECT * FROM report WHERE residentID = ? AND NOT (status = 'Deleted' AND deletedByUser = 1) ORDER BY reportID DESC LIMIT 3");
+$stmt3->bind_param("i", $residentID);
+$stmt3->execute();
+$reports = $stmt3->get_result();
 
-$sqlUser = "SELECT firstName, lastName FROM user WHERE userID='$residentID'";
-$resUser = $conn->query($sqlUser);
-$user = $resUser->fetch_assoc();
+$stmtUser = $conn->prepare("SELECT firstName, lastName FROM user WHERE userID = ?");
+$stmtUser->bind_param("i", $residentID);
+$stmtUser->execute();
+$user = $stmtUser->get_result()->fetch_assoc();
 
 $name = $user['firstName'] . " " . $user['lastName'];
 ?>
@@ -69,7 +74,7 @@ $name = $user['firstName'] . " " . $user['lastName'];
   <!-- Hero -->
   <section class="hero">
     <div class="container hero-content">
-      <h1>Welcome back, <?= $name ?>!</h1>
+      <h1>Welcome back, <?= e($name) ?>!</h1>
       <p>Here's an overview of your reporting activity.</p>
     </div>
     <div class="hero-curve"></div>
@@ -101,7 +106,7 @@ $name = $user['firstName'] . " " . $user['lastName'];
       <div class="card stat-card">
         <div>
           <p>Badge Status</p>
-          <h2><?= $badgeStatus?></h2>  <!--HEREEEEEEEEE-->
+          <h2><?= $badgeStatus?></h2>
         </div>
         <div class="icon-box <?= ($points >= 100) ? 'green-box' : 'gray-box' ?>">
           <i class="fa-solid fa-trophy"></i>
@@ -129,7 +134,7 @@ $name = $user['firstName'] . " " . $user['lastName'];
 
 <?php while($row = $reports->fetch_assoc()): ?>
 
-<a href="report-det.php?id=<?= $row['reportID'] ?>" class="report-card">
+<a href="report-det.php?id=<?= e($row['reportID']) ?>" class="report-card">
 
   <div class="icon">
     <?= $row['type'] == "Water" ? "💧" : "⚡" ?>
@@ -137,18 +142,18 @@ $name = $user['firstName'] . " " . $user['lastName'];
 
   <div class="info">
     <div class="top">
-      <b>RPT-<?= $row['reportID'] ?></b>
-      <span class="badge <?= strtolower($row['severity']) ?>">
-        <?= $row['severity'] ?>
+      <b>RPT-<?= e($row['reportID']) ?></b>
+      <span class="badge <?= e(strtolower($row['severity'])) ?>">
+        <?= e($row['severity']) ?>
       </span>
     </div>
 
-    <div class="meta"><?= $row['description'] ?></div>
-    <div class="meta"><?= $row['city'] ?></div>
+    <div class="meta"><?= e($row['description']) ?></div>
+    <div class="meta"><?= e($row['city']) ?></div>
   </div>
 
-  <div class="status-text <?= strtolower($row['status']) ?>">
-    <?= $row['status'] ?>
+  <div class="status-text <?= e(strtolower($row['status'])) ?>">
+    <?= e($row['status']) ?>
   </div>
 
 </a>

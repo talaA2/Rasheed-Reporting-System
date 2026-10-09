@@ -150,7 +150,7 @@ $error = $_GET['error'] ?? '';
       <button class="btn" type="submit">Log In</button>
 
       <div class="error" id="errorMsg">
-        <?php echo $error; ?>
+        <?php echo htmlspecialchars($error); ?>
       </div>
 
     </form>

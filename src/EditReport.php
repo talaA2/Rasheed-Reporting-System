@@ -1,6 +1,9 @@
 <?php
+require_once __DIR__ . "/session.php";
 include "db.php";
-if (!isset($_SESSION['userID'])) {
+
+// Only logged-in residents can edit reports
+if (!isset($_SESSION['userID']) || ($_SESSION['role'] ?? '') !== 'resident') {
   header("Location: login.php");
   exit();
 }
@@ -8,46 +11,56 @@ if (!isset($_GET['id'])) {
   die("No report selected");
 }
 
-$id = $_GET['id'];
+$id = (int) $_GET['id'];
+$residentID = (int) $_SESSION['userID'];
+
+// Load the report and make sure it belongs to this resident and can still be edited
+$stmt = $conn->prepare("SELECT * FROM report WHERE reportID = ? AND residentID = ?");
+$stmt->bind_param("ii", $id, $residentID);
+$stmt->execute();
+$row = $stmt->get_result()->fetch_assoc();
+
+if (!$row) {
+  die("Report not found.");
+}
+if ($row['status'] === 'Completed' || $row['status'] === 'Deleted') {
+  die("This report can no longer be edited.");
+}
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
-  $desc = $_POST['description'];
-  $city = $_POST['city'];
-  $neighborhood = $_POST['neighborhood'];
-  $street = $_POST['street'];
-  $building = $_POST['building'];
-  $severity = $_POST['severity'];
+  $desc = trim($_POST['description'] ?? '');
+  $city = trim($_POST['city'] ?? '');
+  $neighborhood = trim($_POST['neighborhood'] ?? '');
+  $street = trim($_POST['street'] ?? '');
+  $building = trim($_POST['building'] ?? '');
+  $severity = $_POST['severity'] ?? '';
 
-  $old = $conn->query("SELECT image FROM report WHERE reportID='$id'");
-  $oldRow = $old->fetch_assoc();
-  $imageName = $oldRow['image'];
-
-  if (isset($_FILES['photo']) && $_FILES['photo']['error'] == 0) {
-    $targetDir = "uploads/";
-    $imageName = time() . "_" . basename($_FILES["photo"]["name"]);
-    move_uploaded_file($_FILES["photo"]["tmp_name"], $targetDir . $imageName);
+  if (!in_array($severity, ['Low', 'Medium', 'High'], true)) {
+    die("Invalid severity.");
+  }
+  if ($desc === '' || $city === '' || $neighborhood === '' || $street === '' || $building === '') {
+    die("Please fill in all fields. <a href='EditReport.php?id=$id'>Go back</a>");
   }
 
-  $sql = "UPDATE report SET
-    description='$desc',
-    city='$city',
-    neighborhood='$neighborhood',
-    street='$street',
-    building_no='$building',
-    severity='$severity',
-    image='$imageName'
-    WHERE reportID='$id'";
+  $imageName = $row['image'];
+  $newImage = save_report_photo($_FILES['photo'] ?? null);
+  if ($newImage === false) {
+    die("The photo must be a JPG or PNG image under 5 MB. <a href='EditReport.php?id=$id'>Go back</a>");
+  }
+  if ($newImage !== null) {
+    $imageName = $newImage;
+  }
 
-  $conn->query($sql);
+  $update = $conn->prepare("UPDATE report SET description = ?, city = ?, neighborhood = ?, street = ?,
+                            building_no = ?, severity = ?, image = ?
+                            WHERE reportID = ? AND residentID = ?");
+  $update->bind_param("sssssssii", $desc, $city, $neighborhood, $street, $building, $severity, $imageName, $id, $residentID);
+  $update->execute();
 
   header("Location: report-det.php?id=$id&updated=1");
   exit();
 }
-
-$sql = "SELECT * FROM report WHERE reportID = '$id'";
-$result = $conn->query($sql);
-$row = $result->fetch_assoc();
 ?>
 
 <!DOCTYPE html>
@@ -55,7 +68,7 @@ $row = $result->fetch_assoc();
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Reports</title>
+<title>Edit Report - Rasheed</title>
 
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
@@ -79,7 +92,7 @@ $row = $result->fetch_assoc();
     <i class="fa-regular fa-clipboard"></i> My Reports
   </a>
 
-  <a href="rewards.php" class="nav-link">
+  <a href="Rewards.php" class="nav-link">
     <i class="fa-regular fa-star"></i> Rewards
   </a>
 
@@ -99,7 +112,7 @@ $row = $result->fetch_assoc();
 
   <div class="edit-report-wrapper">
     <h1 class="page-title">Edit Report</h1>
-    <a href="report-det.php?id=<?= $row['reportID'] ?>" class="back-btn">
+    <a href="report-det.php?id=<?= e($row['reportID']) ?>" class="back-btn">
       <i class="fa-solid fa-arrow-left"></i> Back
     </a>
 
@@ -110,37 +123,37 @@ $row = $result->fetch_assoc();
         </div>
 
         <div>
-          <h1 class="edit-report-id">RPT-<?= $row['reportID'] ?></h1>
-          <p class="edit-report-type"><?= $row['type'] ?> Issue</p>
+          <h1 class="edit-report-id">RPT-<?= e($row['reportID']) ?></h1>
+          <p class="edit-report-type"><?= e($row['type']) ?> Issue</p>
         </div>
       </div>
 
       <form id="editReportForm" method="POST" enctype="multipart/form-data">
         <h3 class="edit-section-title">Edit Description</h3>
-        <textarea id="description" name="description"><?= $row['description'] ?></textarea>
+        <textarea id="description" name="description"><?= e($row['description']) ?></textarea>
 
         <h3 class="edit-section-title">Edit Location</h3>
         <div class="edit-location-grid">
           <div class="edit-field">
             <label for="city">City</label>
-            <input type="text" id="city" name="city" value="<?= $row['city'] ?>">
+            <input type="text" id="city" name="city" value="<?= e($row['city']) ?>">
           </div>
 
           <div class="edit-field">
             <label for="neighborhood">Neighborhood</label>
-            <input type="text" id="neighborhood" name="neighborhood" value="<?= $row['neighborhood'] ?>">
+            <input type="text" id="neighborhood" name="neighborhood" value="<?= e($row['neighborhood']) ?>">
           </div>
 
           <div class="edit-field">
             <label for="street">Street</label>
-            <input type="text" id="street" name="street" value="<?= $row['street'] ?>">
+            <input type="text" id="street" name="street" value="<?= e($row['street']) ?>">
           </div>
 
           <div class="edit-field">
             <label for="building">Building</label>
-            <input type="text" id="building" name="building" value="<?= $row['building_no'] ?>">
+            <input type="text" id="building" name="building" value="<?= e($row['building_no']) ?>">
           </div>
-          <input type="hidden" name="severity" id="severityInput" value="<?= $row['severity'] ?>">
+          <input type="hidden" name="severity" id="severityInput" value="<?= e($row['severity']) ?>">
         </div>
 
         <h3 class="edit-section-title">Severity Level</h3>
@@ -153,7 +166,7 @@ $row = $result->fetch_assoc();
         <h3 class="edit-section-title">Update Photo</h3>
         <div class="edit-upload-box" id="uploadBox">
           <div class="edit-current-photo">
-            <img id="currentPhoto" src="uploads/<?= $row['image'] ?>" alt="Report Image">
+            <img id="currentPhoto" src="<?= empty($row['image']) ? '' : 'uploads/' . e($row['image']) ?>" alt="Report Image"<?= empty($row['image']) ? ' style="display:none"' : '' ?>>
           </div>
           <i class="fa-solid fa-cloud-arrow-up"></i>
           <div class="edit-upload-main" id="uploadMain">Click to upload a new image</div>
@@ -166,7 +179,7 @@ $row = $result->fetch_assoc();
             <i class="fa-solid fa-floppy-disk"></i> Save Changes
           </button>
 
-          <a href="report-det.php?id=<?= $row['reportID'] ?>" class="cancel-btn">
+          <a href="report-det.php?id=<?= e($row['reportID']) ?>" class="cancel-btn">
             Cancel
           </a>
         </div>
@@ -197,6 +210,7 @@ photoInput.addEventListener("change", () => {
     const reader = new FileReader();
     reader.onload = function(e) {
       currentPhoto.src = e.target.result;
+      currentPhoto.style.display = "";
     };
 
     reader.readAsDataURL(file);

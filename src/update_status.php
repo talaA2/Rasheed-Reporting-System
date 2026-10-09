@@ -1,11 +1,14 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-session_start();
+require_once __DIR__ . "/session.php";
 include "db.php";
 
-if (!isset($_POST['reportID']) || !isset($_POST['status'])) {
+// Admins only
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+    header("Location: login.php?error=Access denied");
+    exit();
+}
+
+if ($_SERVER["REQUEST_METHOD"] !== "POST" || !isset($_POST['reportID']) || !isset($_POST['status'])) {
     die("Missing data.");
 }
 
@@ -63,17 +66,17 @@ $message = "";
 $notificationType = "";
 
 if ($newStatus === "Pending") {
-    $notificationType = "submitted";
+    $notificationType = "Pending";
     $message = "Your report has been received and is waiting for review.";
 }
 
 if ($newStatus === "In Progress") {
-    $notificationType = "in_progress";
+    $notificationType = "In Progress";
     $message = "Your " . strtolower($type) . " issue is currently being reviewed.";
 }
 
 if ($newStatus === "Completed") {
-    $notificationType = "completed";
+    $notificationType = "Completed";
     $message = "Your " . strtolower($type) . " report has been resolved. You earned 10 points.";
 
 $pointsSql = "UPDATE resident SET points = points + 10 WHERE residentID = ?";
@@ -88,7 +91,7 @@ $pointsStmt = $conn->prepare($pointsSql);
 }
 
 if ($newStatus === "Deleted") {
-    $notificationType = "deleted";
+    $notificationType = "Deleted";
     $message = "Your report has been removed. No points were awarded.";
 }
 

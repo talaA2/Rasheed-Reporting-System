@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . "/session.php";
 include "db.php";
 
 if (!isset($_SESSION['role'])) {
@@ -18,21 +18,23 @@ $id = intval($_GET['id']);
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_id'])) {
 
   $delete_id = intval($_POST['delete_id']);
+  $ownerID = (int) $_SESSION['userID'];
 
-  $sql = "UPDATE report 
-          SET status = 'Deleted' , deletedByUser = 1
-          WHERE reportID = '$delete_id' 
-          AND residentID = '{$_SESSION['userID']}'";
-
-  $conn->query($sql);
+  // Residents can only delete their own reports that are not completed
+  $del = $conn->prepare("UPDATE report
+                         SET status = 'Deleted', deletedByUser = 1
+                         WHERE reportID = ? AND residentID = ? AND status <> 'Completed'");
+  $del->bind_param("ii", $delete_id, $ownerID);
+  $del->execute();
 
   header("Location: MyReports.php");
   exit();
 }
 
-$sql = "SELECT * FROM report WHERE reportID = '$id'";
-$result = $conn->query($sql);
-$row = $result->fetch_assoc();
+$stmt = $conn->prepare("SELECT * FROM report WHERE reportID = ?");
+$stmt->bind_param("i", $id);
+$stmt->execute();
+$row = $stmt->get_result()->fetch_assoc();
 
 if (!$row) {
   echo "Report not found";
@@ -198,21 +200,21 @@ margin-top: 10px;
        <?= $row['type'] == "Water" ? "💧" : "⚡" ?>
     </div>
       <div>
-        <h2 style="margin:0;">RPT-<?= $row['reportID'] ?></h2>
-        <span style="color:gray;"><?= $row['type'] ?>  Issue</span>
+        <h2 style="margin:0;">RPT-<?= e($row['reportID']) ?></h2>
+        <span style="color:gray;"><?= e($row['type']) ?>  Issue</span>
       </div>
     </div>
 
     <!-- STATUS -->
     <div style="margin-top:15px;">
-      <span class="badge" style="background:#eee;"><?= $row['status'] ?></span>
-      <span class="badge <?= strtolower($row['severity']) ?>"> <?= $row['severity'] ?></span>
+      <span class="badge" style="background:#eee;"><?= e($row['status']) ?></span>
+      <span class="badge <?= e(strtolower($row['severity'])) ?>"> <?= e($row['severity']) ?></span>
     </div>
 
     <!-- DESCRIPTION -->
     <div style="margin-top:20px;">
       <p class="label">DESCRIPTION</p>
-      <p><?= $row['description'] ?></p>
+      <p><?= e($row['description']) ?></p>
     </div>
 
     <!-- LOCATION -->
@@ -222,19 +224,19 @@ margin-top: 10px;
       <table class="location-table">
         <tr>
           <td class="label">City</td>
-          <td><?= $row['city'] ?></td>
+          <td><?= e($row['city']) ?></td>
         </tr>
         <tr>
           <td class="label">Neighborhood</td>
-          <td><?= $row['neighborhood'] ?></td>
+          <td><?= e($row['neighborhood']) ?></td>
         </tr>
         <tr>
           <td class="label">Street</td>
-          <td><?= $row['street'] ?></td>
+          <td><?= e($row['street']) ?></td>
         </tr>
         <tr>
           <td class="label">Building</td>
-          <td><?= $row['building_no'] ?></td>
+          <td><?= e($row['building_no']) ?></td>
         </tr>
       </table>
     </div>
@@ -242,7 +244,7 @@ margin-top: 10px;
     <!-- DATE -->
     <div style="margin-top:20px;">
       <p class="label">SUBMITTED</p>
-      <p><?= $row['created_at'] ?></p>
+      <p><?= e($row['created_at']) ?></p>
     </div>
 
     <!-- PHOTO -->
@@ -250,7 +252,11 @@ margin-top: 10px;
       <p class="label">PHOTO</p>
 
       <div class="photo-box">
-        <img src="uploads/<?= $row['image'] ?>">
+        <?php if (!empty($row['image'])): ?>
+          <img src="uploads/<?= e($row['image']) ?>" alt="Report photo">
+        <?php else: ?>
+          <span class="info-note">No photo was attached.</span>
+        <?php endif; ?>
       </div>
     </div>
 
@@ -270,12 +276,12 @@ margin-top: 10px;
   <?php if (!($row['status'] == 'Deleted')&&!($row['status'] == 'Completed')): ?>
 
     <button class="btn"
-      onclick="window.location.href='EditReport.php?id=<?= $row['reportID'] ?>'">
+      onclick="window.location.href='EditReport.php?id=<?= e($row['reportID']) ?>'">
       ✏️ Edit Report
     </button>
 
     <form method="POST" onsubmit="return confirm('Are you sure you want to delete this report?')">
-      <input type="hidden" name="delete_id" value="<?= $row['reportID'] ?>">
+      <input type="hidden" name="delete_id" value="<?= e($row['reportID']) ?>">
       <button type="submit" class="btn btn-danger">🗑 Delete Report</button>
     </form>
     <?php else: ?>

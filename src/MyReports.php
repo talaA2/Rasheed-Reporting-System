@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . "/session.php";
 include "db.php";
 
 if (!isset($_SESSION['userID'])) {
@@ -7,14 +7,15 @@ if (!isset($_SESSION['userID'])) {
   exit();
 }
 
-$residentID = $_SESSION['userID'];
+$residentID = (int) $_SESSION['userID'];
 
-$sql = "SELECT * FROM report 
-        WHERE residentID = '$residentID' 
-        AND NOT (status = 'Deleted' AND deletedByUser = 1)
-        ORDER BY reportID DESC";
-
-$result = $conn->query($sql);
+$stmt = $conn->prepare("SELECT * FROM report
+                        WHERE residentID = ?
+                        AND NOT (status = 'Deleted' AND deletedByUser = 1)
+                        ORDER BY reportID DESC");
+$stmt->bind_param("i", $residentID);
+$stmt->execute();
+$result = $stmt->get_result();
 ?>
 
 <!DOCTYPE html>
@@ -79,10 +80,10 @@ $result = $conn->query($sql);
 
   <?php while($row = $result->fetch_assoc()): ?>
 
-<a href="report-det.php?id=<?= $row['reportID'] ?>"
+<a href="report-det.php?id=<?= e($row['reportID']) ?>"
    class="report-card"
-   data-type="<?= strtolower($row['type']) ?>"
-   data-severity="<?= strtolower($row['severity']) ?>">
+   data-type="<?= e(strtolower($row['type'])) ?>"
+   data-severity="<?= e(strtolower($row['severity'])) ?>">
 
   <div class="icon">
     <?= $row['type'] == "Water" ? "💧" : "⚡" ?>
@@ -90,18 +91,18 @@ $result = $conn->query($sql);
 
   <div class="info">
     <div class="top">
-      <b>RPT-<?= $row['reportID'] ?></b>
-      <span class="badge <?= strtolower($row['severity']) ?>">
-        <?= $row['severity'] ?>
+      <b>RPT-<?= e($row['reportID']) ?></b>
+      <span class="badge <?= e(strtolower($row['severity'])) ?>">
+        <?= e($row['severity']) ?>
       </span>
     </div>
 
-    <div class="meta"><?= $row['description'] ?></div>
-    <div class="meta"><?= $row['city'] ?></div>
+    <div class="meta"><?= e($row['description']) ?></div>
+    <div class="meta"><?= e($row['city']) ?></div>
   </div>
 
-  <div class="status-text <?= strtolower($row['status']) ?>">
-    <?= $row['status'] ?>
+  <div class="status-text <?= e(strtolower($row['status'])) ?>">
+    <?= e($row['status']) ?>
   </div>
 
 </a>

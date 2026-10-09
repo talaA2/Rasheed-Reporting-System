@@ -1,16 +1,19 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-session_start();
+require_once __DIR__ . "/session.php";
 include "db.php";
+
+// Admins only
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+    header("Location: login.php?error=Access denied");
+    exit();
+}
 
 if (!isset($_GET['id'])) {
     die("Report ID is missing.");
 }
 
 $reportID = (int) $_GET['id'];
-$role = isset($_GET['role']) ? $_GET['role'] : 'user';
+$role = 'admin';   // the role comes from the login session, never from the URL
 
 $sql = "
     SELECT 
@@ -329,7 +332,7 @@ function formatSeverity($severity) {
 
       <?php if (!empty($row['image'])) { ?>
         <div class="photo-box">
-          <img src="images/<?php echo htmlspecialchars($row['image']); ?>" alt="Report Photo">
+          <img src="uploads/<?php echo htmlspecialchars($row['image']); ?>" alt="Report Photo">
         </div>
       <?php } else { ?>
         <p>No photo uploaded.</p>
@@ -359,15 +362,6 @@ function formatSeverity($severity) {
           <span class="info-note">No actions available. This report is already deleted.</span>
         <?php } ?>
 
-      <?php } else { ?>
-
-        <?php if ($row['status'] !== 'Completed') { ?>
-          <button class="btn" onclick="goToEdit(<?php echo (int)$row['reportID']; ?>)">✏️ Edit Report</button>
-          <button class="btn-danger" onclick="deleteReport(<?php echo (int)$row['reportID']; ?>)">🗑 Delete Report</button>
-        <?php } else { ?>
-          <span class="info-note">Completed reports cannot be edited or deleted.</span>
-        <?php } ?>
-
       <?php } ?>
 
     </div>
@@ -375,20 +369,6 @@ function formatSeverity($severity) {
   </div>
 
 </div>
-
-<script>
-function goToEdit(id) {
-  window.location.href = "EditReport.php?id=" + id;
-}
-
-function deleteReport(id) {
-  let confirmDelete = confirm("Are you sure you want to delete this report?");
-
-  if (confirmDelete) {
-    window.location.href = "delete_report.php?id=" + id;
-  }
-}
-</script>
 
 <footer class="footer">
   <div class="footer-container">

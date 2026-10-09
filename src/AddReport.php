@@ -1,7 +1,7 @@
 <?php
-session_start();
+require_once __DIR__ . "/session.php";
 include "db.php";
-if (!isset($_SESSION['userID'])) {
+if (!isset($_SESSION['userID']) || ($_SESSION['role'] ?? '') !== 'resident') {
   header("Location: login.php");
   exit();
 }
@@ -10,29 +10,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
   $residentID = $_SESSION['userID']; 
 
-  $desc = $_POST['description'];
-  $issueType = $_POST['issueType'];
-  $severity = $_POST['severity'];
-  $city = $_POST['city'];
-  $neighborhood = $_POST['neighborhood'];
-$street = $_POST['street'];
-$buildingNo = $_POST['buildingNo'];
+  $desc = trim($_POST['description'] ?? '');
+  $issueType = $_POST['issueType'] ?? '';
+  $severity = $_POST['severity'] ?? '';
+  $city = trim($_POST['city'] ?? '');
+  $neighborhood = trim($_POST['neighborhood'] ?? '');
+  $street = trim($_POST['street'] ?? '');
+  $buildingNo = trim($_POST['buildingNo'] ?? '');
 
-$imageName = "";
+  // Only accept the values the form offers
+  if (!in_array($issueType, ['Water', 'Electricity'], true) || !in_array($severity, ['Low', 'Medium', 'High'], true)) {
+    die("Invalid report type or severity.");
+  }
 
-if (isset($_FILES['photo']) && $_FILES['photo']['error'] == 0) {
+  $imageName = save_report_photo($_FILES['photo'] ?? null);
+  if ($imageName === false) {
+    die("The photo must be a JPG or PNG image under 5 MB. <a href='AddReport.php'>Go back</a>");
+  }
+  $imageName = $imageName ?? "";
 
-  $targetDir = "uploads/";
-  $imageName = time() . "_" . basename($_FILES["photo"]["name"]);
-  $targetFile = $targetDir . $imageName;
-
-  move_uploaded_file($_FILES["photo"]["tmp_name"], $targetFile);
-}
-
-  $sql = "INSERT INTO report (description, type, severity , city, neighborhood, street, building_no, status, image, residentID)
-          VALUES ('$desc', '$issueType', '$severity', '$city', '$neighborhood', '$street', '$buildingNo', 'Pending', '$imageName', '$residentID')";
-
-  $conn->query($sql);
+  $stmt = $conn->prepare("INSERT INTO report (description, type, severity, city, neighborhood, street, building_no, status, image, residentID)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?)");
+  $stmt->bind_param("ssssssssi", $desc, $issueType, $severity, $city, $neighborhood, $street, $buildingNo, $imageName, $residentID);
+  $stmt->execute();
 
 // Get the report ID that was just inserted
 $reportID = $conn->insert_id;
@@ -41,10 +41,9 @@ $reportID = $conn->insert_id;
 $message = "Your $issueType report has been submitted and is now Pending.";
 $type = "Pending";
 
-$notifSQL = "INSERT INTO notification (message, type, reportID, residentID)
-             VALUES ('$message', '$type', '$reportID', '$residentID')";
-
-$conn->query($notifSQL);
+$notifStmt = $conn->prepare("INSERT INTO notification (message, type, reportID, residentID) VALUES (?, ?, ?, ?)");
+$notifStmt->bind_param("ssii", $message, $type, $reportID, $residentID);
+$notifStmt->execute();
 
   header("Location: MyReports.php");
   exit();

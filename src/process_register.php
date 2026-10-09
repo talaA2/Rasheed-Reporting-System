@@ -1,14 +1,11 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-session_start();
+require_once __DIR__ . "/session.php";
 include "db.php";
 
-$firstName = trim($_POST['firstName']);
-$lastName = trim($_POST['lastName']);
-$phone = trim($_POST['phoneNumber']);
-$password = $_POST['password'];
+$firstName = trim($_POST['firstName'] ?? '');
+$lastName = trim($_POST['lastName'] ?? '');
+$phone = trim($_POST['phoneNumber'] ?? '');
+$password = $_POST['password'] ?? '';
 $confirmPassword = $_POST['confirmPassword'] ?? '';
 
 if (empty($firstName) || empty($lastName) || empty($phone) || empty($password)) {
@@ -34,8 +31,10 @@ if ($password !== $confirmPassword) {
     exit();
 }
 
-$sqlCheck = "SELECT * FROM user WHERE phoneNumber = '$phone'";
-$result = $conn->query($sqlCheck);
+$checkStmt = $conn->prepare("SELECT userID FROM user WHERE phoneNumber = ?");
+$checkStmt->bind_param("s", $phone);
+$checkStmt->execute();
+$result = $checkStmt->get_result();
 
 if ($result->num_rows > 0) {
     header("Location: register.php?error=Phone already exists");
@@ -44,17 +43,19 @@ if ($result->num_rows > 0) {
 
 $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-$sqlUser = "INSERT INTO user (firstName, lastName, phoneNumber, password, role)
-            VALUES ('$firstName', '$lastName', '$phone', '$hashedPassword', 'resident')";
+$userStmt = $conn->prepare("INSERT INTO user (firstName, lastName, phoneNumber, password, role)
+                            VALUES (?, ?, ?, ?, 'resident')");
+$userStmt->bind_param("ssss", $firstName, $lastName, $phone, $hashedPassword);
 
-if ($conn->query($sqlUser)) {
+if ($userStmt->execute()) {
 
     $userID = $conn->insert_id;
 
-    $sqlResident = "INSERT INTO resident (residentID, points)
-                    VALUES ($userID, 0)";
-    $conn->query($sqlResident);
+    $residentStmt = $conn->prepare("INSERT INTO resident (residentID, points) VALUES (?, 0)");
+    $residentStmt->bind_param("i", $userID);
+    $residentStmt->execute();
 
+    session_regenerate_id(true);   // new session ID after sign-up
     $_SESSION['userID'] = $userID;
     $_SESSION['role'] = "resident";
 

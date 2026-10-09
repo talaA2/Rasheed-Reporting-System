@@ -1,8 +1,5 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-session_start();
+require_once __DIR__ . "/session.php";
 include "db.php";
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
@@ -316,7 +313,7 @@ function severityClass($severity) {
       <?php while ($row = $result->fetch_assoc()) { ?>
         <tr>
           <td>
-            <a class="details-link" href="report_details_admin.php?id=<?php echo urlencode($row['reportID']); ?>&role=admin">
+            <a class="details-link" href="report_details_admin.php?id=<?php echo urlencode($row['reportID']); ?>">
               <?php echo htmlspecialchars($row['reportID']); ?>
             </a>
           </td>
